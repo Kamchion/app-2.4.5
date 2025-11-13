@@ -614,65 +614,34 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
         return;
       }
       
-      // OPTIMIZACIÓN: Cargar productos con una sola consulta optimizada usando LEFT JOIN
-      const allMainProducts = await db.getAllAsync<any>(
+      // OPTIMIZACIÓN: Consulta SQL optimizada que filtra directamente en la base de datos
+      const result = await db.getAllAsync<any>(
         `SELECT 
           p.*,
           COUNT(v.id) as variantCount,
-          SUM(CASE WHEN v.hideInCatalog = 0 THEN 1 ELSE 0 END) as visibleVariantCount
+          SUM(CASE WHEN v.hideInCatalog = 0 THEN 1 ELSE 0 END) as visibleVariantCount,
+          0 as hideInCatalog
          FROM products p
          LEFT JOIN products v ON v.parentSku = p.sku AND v.isActive = 1
          WHERE p.isActive = 1 
          AND (p.parentSku IS NULL OR p.parentSku = '') 
+         AND (
+           p.id || p.sku || p.name
+         ) IS NOT NULL
          GROUP BY p.id
+         HAVING (
+           (COUNT(v.id) > 0 AND SUM(CASE WHEN v.hideInCatalog = 0 THEN 1 ELSE 0 END) > 0)
+           OR (COUNT(v.id) = 0 AND p.hideInCatalog = 0)
+         )
          ORDER BY p.displayOrder ASC, p.name ASC`
       );
       
-      console.log(`📦 ${allMainProducts.length} productos principales cargados`);
+      console.log(`✅ ${result.length} productos visibles cargados`);
       
-      // Filtrar productos basándose en lógica de visibilidad
-      const result = allMainProducts.filter((product: any) => {
-        const variantCount = product.variantCount || 0;
-        const visibleVariantCount = product.visibleVariantCount || 0;
-        
-        if (variantCount > 0) {
-          // Es un producto padre - mostrar si al menos una variante es visible
-          return visibleVariantCount > 0;
-        } else {
-          // Es un producto simple (sin variantes) - mostrar si no está oculto
-          return product.hideInCatalog === 0;
-        }
-      }).map((product: any) => {
-        // Forzar hideInCatalog=0 en productos padre con variantes visibles
-        if ((product.variantCount || 0) > 0) {
-          return { ...product, hideInCatalog: 0 };
-        }
-        return product;
-      });
-      
-      console.log(`✅ ${result.length} productos visibles (de ${allMainProducts.length} productos principales)`);
-      
-      // Validar que los productos tengan los campos requeridos
-      const validProducts = result.filter((p: Product) => {
-        const hasBasicFields = p.id && p.sku && p.name;
-        const hasPrice = p.basePrice || p.priceCity || p.priceInterior || p.priceSpecial;
-        
-        if (!hasBasicFields || !hasPrice) {
-          console.warn('⚠️ Producto inválido filtrado:', {
-            sku: p.sku,
-            name: p.name,
-            hasBasicFields,
-            hasPrice
-          });
-          return false;
-        }
-        
-        return true;
-      });
-      
-      if (validProducts.length < result.length) {
-        console.warn(`⚠️ ${result.length - validProducts.length} productos inválidos filtrados`);
-      }
+      // Validación rápida de campos requeridos
+      const validProducts = result.filter((p: Product) => 
+        p.id && p.sku && p.name && (p.basePrice || p.priceCity || p.priceInterior || p.priceSpecial)
+      );
       
       setProducts(validProducts);
       setFilteredProducts(validProducts);

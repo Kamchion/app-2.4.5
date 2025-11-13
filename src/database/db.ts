@@ -194,6 +194,9 @@ export async function initDatabase(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
       CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku);
       CREATE INDEX IF NOT EXISTS idx_products_active ON products(isActive);
+      CREATE INDEX IF NOT EXISTS idx_products_parent ON products(parentSku);
+      CREATE INDEX IF NOT EXISTS idx_products_hide ON products(hideInCatalog);
+      CREATE INDEX IF NOT EXISTS idx_products_composite ON products(isActive, parentSku, hideInCatalog);
       CREATE INDEX IF NOT EXISTS idx_clients_active ON clients(isActive);
       CREATE INDEX IF NOT EXISTS idx_clients_vendor ON clients(assignedVendorId);
       CREATE INDEX IF NOT EXISTS idx_clients_pricetype ON clients(priceType);
