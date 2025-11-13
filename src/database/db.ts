@@ -6,7 +6,7 @@ import * as SQLite from 'expo-sqlite';
  */
 
 const DB_NAME = 'vendedor_offline.db';
-const DB_VERSION = 5; // Incrementar cuando hay cambios en el esquema
+const DB_VERSION = 6; // Incrementar cuando hay cambios en el esquema
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -161,7 +161,8 @@ export async function initDatabase(): Promise<void> {
         customerNote TEXT,
         createdAt TEXT,
         updatedAt TEXT,
-        syncedAt TEXT
+        syncedAt TEXT,
+        synced INTEGER DEFAULT 1
       );
     `);
 
@@ -601,6 +602,21 @@ async function migrateDatabase(database: SQLite.SQLiteDatabase): Promise<void> {
         }
 
         console.log('✅ Migración v5 completada');
+      }
+
+      // Migración v6: Agregar columna synced a order_history
+      if (currentVersion < 6) {
+        console.log('🔄 Aplicando migración v6: Agregando columna synced a order_history...');
+        
+        try {
+          await database.execAsync(`
+            ALTER TABLE order_history ADD COLUMN synced INTEGER DEFAULT 1;
+          `);
+        } catch (e) {
+          // La columna ya existe, ignorar
+        }
+
+        console.log('✅ Migración v6 completada');
       }
 
       // Actualizar versión en config
