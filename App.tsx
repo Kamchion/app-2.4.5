@@ -207,7 +207,6 @@ export default function App() {
   };
 
   const handleExitApp = () => {
-    setMenuVisible(false);
     Alert.alert(
       'Salir',
       '¿Desea salir de la aplicación?',
@@ -218,7 +217,14 @@ export default function App() {
         },
         {
           text: 'Salir',
-          onPress: () => BackHandler.exitApp(),
+          onPress: async () => {
+            // Hacer logout completo
+            await AsyncStorage.removeItem('vendor_token');
+            await AsyncStorage.removeItem('vendor_user');
+            setIsLoggedIn(false);
+            // Cerrar la app
+            BackHandler.exitApp();
+          },
         },
       ]
     );

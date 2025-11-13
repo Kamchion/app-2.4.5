@@ -428,3 +428,17 @@ export async function createOrderOnline(params: {
     }
   );
 }
+
+/**
+ * Obtiene la configuración de campos de producto para vendedores
+ */
+export async function getProductFieldsVendor(): Promise<any[]> {
+  return await trpcQuery<any[]>('config.getProductFieldsVendor');
+}
+
+/**
+ * Obtiene los estilos de tarjetas de producto
+ */
+export async function getCardStyles(): Promise<any> {
+  return await trpcQuery<any>('config.getCardStyles');
+}
