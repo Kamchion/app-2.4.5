@@ -50,8 +50,15 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
         'SELECT * FROM order_history ORDER BY createdAt DESC'
       );
       
+      // Marcar los pedidos del historial como sincronizados
+      const historyWithSyncFlag = historyOrders.map(order => ({
+        ...order,
+        synced: 1,
+        status: 'sent' // Marcar como enviado
+      }));
+      
       // Combinar ambas listas
-      const allOrders = [...pendingOrders, ...historyOrders];
+      const allOrders = [...pendingOrders, ...historyWithSyncFlag];
       
       // Ordenar por fecha
       allOrders.sort((a, b) => {
@@ -384,7 +391,7 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
 
         <View style={styles.orderFooter}>
           <Text style={styles.totalLabel}>Total:</Text>
-          <Text style={styles.totalValue}>${item.total}</Text>
+          <Text style={styles.totalValue}>${parseFloat(item.total).toFixed(2)}</Text>
           <TouchableOpacity 
             style={styles.viewButton}
             onPress={handleOrderPress}
