@@ -510,6 +510,12 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
   const [isOnline, setIsOnline] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
+  
+  // Estados para lazy loading
+  const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const PRODUCTS_PER_LOAD = 100;
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [selectedClient, setSelectedClient] = useState<any>(null);
 
@@ -604,73 +610,50 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
         );
         setProducts([]);
         setFilteredProducts([]);
+        setDisplayedProducts([]);
         return;
       }
       
-      // Cargar todos los productos activos sin parentSku (productos principales y padres)
-      const allMainProducts = await db.getAllAsync<Product>(
-        `SELECT * FROM products 
-         WHERE isActive = 1 
-         AND (parentSku IS NULL OR parentSku = '') 
-         ORDER BY displayOrder ASC, name ASC`
+      // OPTIMIZACIÓN: Cargar productos con una sola consulta optimizada usando LEFT JOIN
+      const allMainProducts = await db.getAllAsync<any>(
+        `SELECT 
+          p.*,
+          COUNT(v.id) as variantCount,
+          SUM(CASE WHEN v.hideInCatalog = 0 THEN 1 ELSE 0 END) as visibleVariantCount
+         FROM products p
+         LEFT JOIN products v ON v.parentSku = p.sku AND v.isActive = 1
+         WHERE p.isActive = 1 
+         AND (p.parentSku IS NULL OR p.parentSku = '') 
+         GROUP BY p.id
+         ORDER BY p.displayOrder ASC, p.name ASC`
       );
       
-      // Filtrar productos basándose en lógica de visibilidad:
-      // - Productos simples (sin variantes): mostrar si hideInCatalog = 0
-      // - Productos padre (con variantes): mostrar si al menos una variante tiene hideInCatalog = 0
-      const result = [];
+      console.log(`📦 ${allMainProducts.length} productos principales cargados`);
       
-      for (const product of allMainProducts) {
-        // Verificar si este producto tiene variantes
-        const variants = await db.getAllAsync<Product>(
-          `SELECT hideInCatalog FROM products 
-           WHERE parentSku = ? AND isActive = 1`,
-          [product.sku]
-        );
+      // Filtrar productos basándose en lógica de visibilidad
+      const result = allMainProducts.filter((product: any) => {
+        const variantCount = product.variantCount || 0;
+        const visibleVariantCount = product.visibleVariantCount || 0;
         
-        if (variants.length > 0) {
+        if (variantCount > 0) {
           // Es un producto padre - mostrar si al menos una variante es visible
-          const hasVisibleVariant = variants.some(v => v.hideInCatalog === 0);
-          if (hasVisibleVariant) {
-            // ✅ FORZAR hideInCatalog=0 en el producto padre
-            const parentProduct = { ...product, hideInCatalog: 0 };
-            result.push(parentProduct);
-            console.log(`✅ Producto padre con variantes visibles: ${product.name} (${product.sku}) - hideInCatalog forzado a 0`);
-          } else {
-            console.log(`⏭️ Producto padre sin variantes visibles: ${product.name} (${product.sku})`);
-          }
+          return visibleVariantCount > 0;
         } else {
           // Es un producto simple (sin variantes) - mostrar si no está oculto
-          if (product.hideInCatalog === 0) {
-            result.push(product);
-          }
+          return product.hideInCatalog === 0;
         }
-      }
+      }).map((product: any) => {
+        // Forzar hideInCatalog=0 en productos padre con variantes visibles
+        if ((product.variantCount || 0) > 0) {
+          return { ...product, hideInCatalog: 0 };
+        }
+        return product;
+      });
       
-      console.log(`✅ ${result.length} productos cargados exitosamente (de ${allMainProducts.length} productos principales)`);
-      console.log(`   - Productos simples visibles: ${result.filter(p => !allMainProducts.find(m => m.parentSku === p.sku)).length}`);
-      console.log(`   - Productos padre con variantes visibles: ${result.filter(p => allMainProducts.find(m => m.parentSku === p.sku)).length}`);
-      
-      
-      // 🔍 DEBUG: Verificar productos SPRAY
-      const sprayProducts = await db.getAllAsync<Product>(
-        `SELECT sku, name, parentSku, isActive, hideInCatalog, basePrice, priceCity, priceInterior, priceSpecial 
-         FROM products 
-         WHERE name LIKE '%SPRAY%' OR sku LIKE '%SPRAY%'`
-      );
-      if (sprayProducts.length > 0) {
-        console.log(`\n🔍 DEBUG: Productos SPRAY en BD (${sprayProducts.length}):`);
-        sprayProducts.forEach(p => {
-          console.log(`  - ${p.name} (${p.sku})`);
-          console.log(`    parentSku: ${p.parentSku || 'NULL'}`);
-          console.log(`    isActive: ${p.isActive}, hideInCatalog: ${p.hideInCatalog}`);
-          console.log(`    Precios: base=${p.basePrice}, city=${p.priceCity}, interior=${p.priceInterior}, special=${p.priceSpecial}`);
-        });
-      }
+      console.log(`✅ ${result.length} productos visibles (de ${allMainProducts.length} productos principales)`);
       
       // Validar que los productos tengan los campos requeridos
-      // Debe tener al menos un precio válido (basePrice o alguno de los diferenciados)
-      const validProducts = result.filter(p => {
+      const validProducts = result.filter((p: Product) => {
         const hasBasicFields = p.id && p.sku && p.name;
         const hasPrice = p.basePrice || p.priceCity || p.priceInterior || p.priceSpecial;
         
@@ -679,27 +662,25 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
             sku: p.sku,
             name: p.name,
             hasBasicFields,
-            hasPrice,
-            basePrice: p.basePrice,
-            priceCity: p.priceCity,
-            priceInterior: p.priceInterior,
-            priceSpecial: p.priceSpecial
+            hasPrice
           });
-          // 🔍 DEBUG: Alertar si es un producto SPRAY
-          if (p.name?.includes('SPRAY') || p.sku?.includes('SPRAY')) {
-            console.error('❌ SPRAY FILTRADO - Razón:', !hasBasicFields ? 'Campos básicos faltantes' : 'Sin precios válidos');
-          }
           return false;
         }
         
         return true;
       });
+      
       if (validProducts.length < result.length) {
         console.warn(`⚠️ ${result.length - validProducts.length} productos inválidos filtrados`);
       }
       
       setProducts(validProducts);
       setFilteredProducts(validProducts);
+      
+      // LAZY LOADING: Cargar solo los primeros 100 productos para display inicial
+      setDisplayedProducts(validProducts.slice(0, PRODUCTS_PER_LOAD));
+      setOffset(PRODUCTS_PER_LOAD);
+      console.log(`🎯 Mostrando primeros ${Math.min(PRODUCTS_PER_LOAD, validProducts.length)} productos`);
       
       // Extraer categorías únicas
       const uniqueCategories = [...new Set(result.map(p => p.category).filter(c => c))].sort();
@@ -710,6 +691,29 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadMoreProducts = () => {
+    if (loadingMore) return;
+    
+    const currentFiltered = filteredProducts;
+    const currentDisplayed = displayedProducts.length;
+    
+    if (currentDisplayed >= currentFiltered.length) {
+      // Ya se mostraron todos los productos
+      return;
+    }
+    
+    setLoadingMore(true);
+    
+    // Cargar los siguientes 100 productos
+    const nextBatch = currentFiltered.slice(currentDisplayed, currentDisplayed + PRODUCTS_PER_LOAD);
+    setDisplayedProducts([...displayedProducts, ...nextBatch]);
+    setOffset(currentDisplayed + PRODUCTS_PER_LOAD);
+    
+    console.log(`📄 Cargados ${nextBatch.length} productos más (Total mostrados: ${currentDisplayed + nextBatch.length}/${currentFiltered.length})`);
+    
+    setLoadingMore(false);
   };
 
   const filterProducts = () => {
@@ -732,6 +736,10 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
     }
 
     setFilteredProducts(filtered);
+    
+    // Resetear lazy loading cuando se filtra
+    setDisplayedProducts(filtered.slice(0, PRODUCTS_PER_LOAD));
+    setOffset(PRODUCTS_PER_LOAD);
   };
 
   const handleSync = async () => {
@@ -941,13 +949,28 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
 
       {/* Product List */}
       <FlatList
-        data={filteredProducts}
+        data={displayedProducts}
         renderItem={renderProduct}
         keyExtractor={(item) => item.id}
         numColumns={numColumns}
         key={numColumns}
         columnWrapperStyle={styles.productRow}
         contentContainerStyle={styles.productList}
+        onEndReached={loadMoreProducts}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          loadingMore ? (
+            <View style={{ padding: 20, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color="#2563eb" />
+              <Text style={{ marginTop: 8, color: '#64748b' }}>Cargando más productos...</Text>
+            </View>
+          ) : null
+        }
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={20}
+        updateCellsBatchingPeriod={50}
+        initialNumToRender={20}
+        windowSize={10}
         // refreshControl desactivado - usar botón de sincronización en panel
         // refreshControl={
         //   <RefreshControl refreshing={refreshing} onRefresh={handleSync} />
