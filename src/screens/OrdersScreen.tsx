@@ -361,11 +361,13 @@ export default function OrdersScreen({ navigation }: OrdersScreenProps) {
           <View
             style={[
               styles.statusBadge,
+              item.status === 'draft' ? styles.draftBadge :
               item.synced ? styles.syncedBadge : styles.pendingBadge,
             ]}
           >
             <Text style={styles.statusText}>
-              {item.synced ? '✓ Enviado' : '⏳ Pendiente por enviar'}
+              {item.status === 'draft' ? '📋 Borrador' :
+               item.synced ? '✓ Enviado' : '⏳ Pendiente por enviar'}
             </Text>
           </View>
         </View>
@@ -584,6 +586,9 @@ const styles = StyleSheet.create({
   },
   pendingBadge: {
     backgroundColor: '#fef3c7',
+  },
+  draftBadge: {
+    backgroundColor: '#e0e7ff',
   },
   statusText: {
     fontSize: 12,

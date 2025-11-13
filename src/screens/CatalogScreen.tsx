@@ -13,6 +13,7 @@ import {
   ScrollView,
   Dimensions,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { getDatabase } from '../database/db';
 import { Product } from '../types';
 import { syncCatalog, checkConnection } from '../services/sync';
@@ -157,6 +158,8 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
   // Estados para campos personalizados
   const [customText, setCustomText] = useState('');
   const [customSelect, setCustomSelect] = useState('');
+  const [showCustomTextModal, setShowCustomTextModal] = useState(false);
+  const [tempCustomText, setTempCustomText] = useState('');
   
   // Calcular precio según tipo de cliente usando la utilidad
   const displayPrice = getProductPrice(item, (priceType as PriceType) || 'ciudad');
@@ -286,45 +289,9 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
     }
 
     // Manejar campos personalizados editables
-    if (field.field === 'customText') {
-      return (
-        <TextInput
-          key={index}
-          value={customText}
-          onChangeText={setCustomText}
-          placeholder="Texto"
-          maxLength={field.maxLength || 8}
-          style={styles.customTextInput}
-        />
-      );
-    }
-
-    if (field.field === 'customSelect') {
-      const options = field.options || [];
-      return (
-        <View key={index} style={styles.customSelectContainer}>
-          <Text style={styles.customSelectLabel}>Seleccionar:</Text>
-          <View style={styles.customSelectButtons}>
-            {options.map((opt: string) => (
-              <TouchableOpacity
-                key={opt}
-                style={[
-                  styles.customSelectButton,
-                  customSelect === opt && styles.customSelectButtonActive
-                ]}
-                onPress={() => setCustomSelect(opt)}
-              >
-                <Text style={[
-                  styles.customSelectButtonText,
-                  customSelect === opt && styles.customSelectButtonTextActive
-                ]}>
-                  {opt}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      );
+    // Nota: customText y customSelect se renderizan juntos más abajo
+    if (field.field === 'customText' || field.field === 'customSelect') {
+      return null; // No renderizar individualmente
     }
 
     if (!value && value !== 0) return null;
@@ -505,6 +472,45 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
           </TouchableOpacity>
         </Modal>
 
+        {/* Modal de customText */}
+        <Modal
+          visible={showCustomTextModal}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowCustomTextModal(false)}
+        >
+          <View style={styles.customTextModalOverlay}>
+            <View style={styles.customTextModalContent}>
+              <Text style={styles.customTextModalTitle}>Ingresar texto</Text>
+              <TextInput
+                value={tempCustomText}
+                onChangeText={setTempCustomText}
+                placeholder="Texto"
+                maxLength={productFields.find(f => f.field === 'customText')?.maxLength || 8}
+                style={styles.customTextModalInput}
+                autoFocus={true}
+              />
+              <View style={styles.customTextModalButtons}>
+                <TouchableOpacity
+                  style={[styles.customTextModalButton, styles.customTextModalButtonCancel]}
+                  onPress={() => setShowCustomTextModal(false)}
+                >
+                  <Text style={styles.customTextModalButtonText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.customTextModalButton, styles.customTextModalButtonConfirm]}
+                  onPress={() => {
+                    setCustomText(tempCustomText);
+                    setShowCustomTextModal(false);
+                  }}
+                >
+                  <Text style={[styles.customTextModalButtonText, styles.customTextModalButtonTextConfirm]}>Aceptar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         {/* Modal de variantes */}
         <Modal
           visible={showVariantsModal}
@@ -609,6 +615,39 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
               <Text style={styles.productPrice}>${displayPrice || '0.00'}</Text>
               <Text style={styles.productStock}>Stock: {item.stock || 0}</Text>
             </>
+          )}
+          
+          {/* Renderizar customText y customSelect en una fila si están habilitados */}
+          {(productFields.some(f => f.field === 'customText') || productFields.some(f => f.field === 'customSelect')) && (
+            <View style={styles.customFieldsRow}>
+              {productFields.some(f => f.field === 'customText') && (
+                <TouchableOpacity 
+                  style={styles.customTextCompact}
+                  onPress={() => {
+                    setTempCustomText(customText);
+                    setShowCustomTextModal(true);
+                  }}
+                >
+                  <Text style={styles.customTextPlaceholder}>
+                    {customText || 'Texto'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              {productFields.some(f => f.field === 'customSelect') && (
+                <View style={styles.customSelectCompact}>
+                  <Picker
+                    selectedValue={customSelect}
+                    onValueChange={(itemValue) => setCustomSelect(itemValue)}
+                    style={styles.pickerStyle}
+                  >
+                    <Picker.Item label="Select" value="" />
+                    {(productFields.find(f => f.field === 'customSelect')?.options || []).map((opt: string) => (
+                      <Picker.Item key={opt} label={opt} value={opt} />
+                    ))}
+                  </Picker>
+                </View>
+              )}
+            </View>
           )}
         </View>
 
@@ -1777,47 +1816,86 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  customTextInput: {
+  customFieldsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  customTextCompact: {
+    flex: 1,
     borderWidth: 1,
     borderColor: '#d1d5db',
-    borderRadius: 6,
+    borderRadius: 4,
     paddingHorizontal: 8,
     paddingVertical: 6,
-    fontSize: 12,
     backgroundColor: '#ffffff',
-    marginVertical: 4,
   },
-  customSelectContainer: {
-    marginVertical: 4,
+  customTextPlaceholder: {
+    fontSize: 12,
+    color: '#9ca3af',
   },
-  customSelectLabel: {
-    fontSize: 11,
-    color: '#6b7280',
-    marginBottom: 4,
-  },
-  customSelectButtons: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  customSelectButton: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 4,
+  customSelectCompact: {
+    flex: 1,
     borderWidth: 1,
     borderColor: '#d1d5db',
+    borderRadius: 4,
     backgroundColor: '#ffffff',
+    overflow: 'hidden',
   },
-  customSelectButtonActive: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
+  pickerStyle: {
+    height: 32,
+    fontSize: 12,
   },
-  customSelectButtonText: {
-    fontSize: 10,
-    color: '#6b7280',
+  customTextModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  customSelectButtonTextActive: {
-    color: '#ffffff',
+  customTextModalContent: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 20,
+    width: '80%',
+    maxWidth: 300,
+  },
+  customTextModalTitle: {
+    fontSize: 18,
     fontWeight: '600',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  customTextModalInput: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    marginBottom: 16,
+  },
+  customTextModalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  customTextModalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  customTextModalButtonCancel: {
+    backgroundColor: '#f3f4f6',
+  },
+  customTextModalButtonConfirm: {
+    backgroundColor: '#3b82f6',
+  },
+  customTextModalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  customTextModalButtonTextConfirm: {
+    color: '#ffffff',
   },
 });
