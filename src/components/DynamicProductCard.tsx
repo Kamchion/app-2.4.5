@@ -184,9 +184,12 @@ const DynamicProductCard = React.memo(({ item, navigation, priceType, onAddToCar
 
     if (!value && value !== 0) return null;
 
+    // Forzar fontSize 10 para el nombre del producto
+    const fontSize = field.field === 'name' ? 10 : parseInt(field.fontSize || '12');
+    
     const style = {
       color: field.textColor || '#000000',
-      fontSize: parseInt(field.fontSize || '12'),
+      fontSize: fontSize,
       fontWeight: (field.fontWeight || '400') as any,
       textAlign: (field.textAlign || 'left') as any,
     };
@@ -464,7 +467,7 @@ const styles = StyleSheet.create({
   },
   priceText: {
     fontWeight: 'bold',
-    fontSize: 16,
+    fontSize: 14,
     color: '#2563eb',
   },
   badgeContainer: {
