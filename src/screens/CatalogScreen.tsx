@@ -151,9 +151,6 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
   const [adding, setAdding] = useState(false);
   // Estado para cantidades de variantes (key: variantId, value: quantity)
   const [variantQuantities, setVariantQuantities] = useState<Record<string, number>>({});
-  // Estados para configuración dinámica de campos
-  const [productFields, setProductFields] = useState<any[]>([]);
-  const [cardStyles, setCardStyles] = useState<any>(null);
   
   // Calcular precio según tipo de cliente usando la utilidad
   const displayPrice = getProductPrice(item, (priceType as PriceType) || 'ciudad');
@@ -164,29 +161,7 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
     }
     // Verificar si tiene variantes
     checkHasVariants();
-    // Cargar configuración de campos
-    loadProductFieldsConfig();
   }, [item?.image, item?.sku]);
-
-  const loadProductFieldsConfig = async () => {
-    try {
-      const db = getDatabase();
-      const fields = await db.getAllAsync<any>(
-        `SELECT field, label, enabled, "order", displayType, "column", textColor, fontSize, fontWeight, textAlign
-         FROM product_fields
-         WHERE enabled = 1
-         ORDER BY "order" ASC`
-      );
-      setProductFields(fields);
-      
-      const styles = await db.getFirstAsync<any>(
-        'SELECT marginTop, marginBottom, marginLeft, marginRight, imageSpacing, fieldSpacing FROM card_styles WHERE id = 1'
-      );
-      setCardStyles(styles);
-    } catch (error) {
-      console.error('❌ Error al cargar configuración de campos:', error);
-    }
-  };
 
   const checkHasVariants = async () => {
     try {
@@ -267,104 +242,6 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
     console.error('❌ ProductCard: Datos de producto inválidos', item);
     return null;
   }
-
-  // Función para renderizar un campo dinámico
-  const renderDynamicField = (field: any, index: number) => {
-    let value: any = (item as any)[field.field];
-    
-    // Manejar campo de precio especial
-    if (field.field === 'rolePrice' || field.field === 'price') {
-      value = displayPrice;
-    }
-
-    if (!value && value !== 0) return null;
-
-    const textStyle = {
-      color: field.textColor || '#1e293b',
-      fontSize: parseInt(field.fontSize || '12'),
-      fontWeight: (field.fontWeight || '400') as any,
-      textAlign: (field.textAlign || 'left') as any,
-    };
-
-    switch (field.displayType) {
-      case 'price':
-        return (
-          <Text key={index} style={[styles.productPrice, textStyle]}>
-            ${formatPrice(value)}
-          </Text>
-        );
-      
-      case 'badge':
-        return (
-          <View key={index} style={styles.badgeContainer}>
-            <Text style={[styles.badgeText, textStyle]}>
-              {value}
-            </Text>
-          </View>
-        );
-      
-      case 'number':
-        if (field.field === 'stock') {
-          return (
-            <Text key={index} style={[styles.productStock, textStyle]}>
-              Stock: {value}
-            </Text>
-          );
-        }
-        if (field.field === 'unitsPerBox') {
-          return (
-            <Text key={index} style={[styles.fieldText, textStyle]}>
-              Caja: {value}
-            </Text>
-          );
-        }
-        if (field.field === 'minQuantity') {
-          return (
-            <Text key={index} style={[styles.fieldText, textStyle]}>
-              Mín: {value}
-            </Text>
-          );
-        }
-        return (
-          <Text key={index} style={[styles.fieldText, textStyle]}>
-            {field.label}: {value}
-          </Text>
-        );
-      
-      case 'multiline':
-        return (
-          <Text key={index} style={[styles.productName, textStyle]} numberOfLines={2}>
-            {value}
-          </Text>
-        );
-      
-      default:
-        // Para campos de texto normales como name, sku, etc.
-        if (field.field === 'name') {
-          return (
-            <Text key={index} style={[styles.productName, textStyle]} numberOfLines={2}>
-              {value}
-            </Text>
-          );
-        }
-        if (field.field === 'sku') {
-          return (
-            <Text key={index} style={[styles.productSku, textStyle]}>
-              SKU: {value}
-            </Text>
-          );
-        }
-        if (field.field === 'category') {
-          return (
-            <View key={index} style={styles.productCategory}>
-              <Ionicons name="pricetag-outline" size={12} color="#64748b" />
-              <Text style={[styles.productCategoryText, textStyle]}>{value}</Text>
-            </View>
-          );
-        }
-        return <Text key={index} style={[styles.fieldText, textStyle]}>{value}</Text>;
-    }
-  };
 
   const incrementQuantity = () => {
     const minQty = item.minQuantity || 1;
@@ -546,20 +423,20 @@ const ProductCard = React.memo(({ item, navigation, priceType, onAddToCart }: { 
           )}
         </TouchableOpacity>
 
-        {/* Información del producto - Renderizado dinámico */}
+        {/* Información del producto */}
         <View style={styles.productInfo}>
-          {productFields.length > 0 ? (
-            // Renderizar campos dinámicos según configuración
-            productFields.map((field, index) => renderDynamicField(field, index))
-          ) : (
-            // Fallback: mostrar campos por defecto si no hay configuración
-            <>
-              <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-              <Text style={styles.productSku}>SKU: {item.sku}</Text>
-              <Text style={styles.productPrice}>${displayPrice || '0.00'}</Text>
-              <Text style={styles.productStock}>Stock: {item.stock || 0}</Text>
-            </>
+          <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
+          <Text style={styles.productSku}>SKU: {item.sku}</Text>
+          {item.category && (
+            <View style={styles.productCategory}>
+              <Ionicons name="pricetag-outline" size={12} color="#64748b" />
+              <Text style={styles.productCategoryText}>{item.category}</Text>
+            </View>
           )}
+        </View>
+        <View style={styles.productPricing}>
+          <Text style={styles.productPrice}>${displayPrice || '0.00'}</Text>
+          <Text style={styles.productStock}>Stock: {item.stock || 0}</Text>
         </View>
 
         {/* Renderizado condicional según si tiene variantes o no */}
@@ -1429,23 +1306,6 @@ const styles = StyleSheet.create({
   productStock: {
     fontSize: 11,
     color: '#6b7280',
-  },
-  fieldText: {
-    fontSize: 12,
-    color: '#1e293b',
-    marginBottom: 4,
-  },
-  badgeContainer: {
-    backgroundColor: '#f3f4f6',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-    marginBottom: 4,
-  },
-  badgeText: {
-    fontSize: 11,
-    color: '#64748b',
   },
   quantityText: {
     fontSize: 16,

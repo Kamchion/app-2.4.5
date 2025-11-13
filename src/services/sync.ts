@@ -164,25 +164,6 @@ export async function syncCatalog(
     // Actualizar timestamp de última sincronización
     await setLastSyncTimestamp(response.timestamp);
 
-    // Sincronizar configuración de campos de producto y estilos
-    onProgress?.('Sincronizando configuración de tarjetas...');
-    try {
-      const { getProductFieldsVendor, getCardStyles } = await import('./api');
-      const { syncProductFields, syncCardStyles } = await import('../database/db');
-      
-      const [fields, styles] = await Promise.all([
-        getProductFieldsVendor(),
-        getCardStyles()
-      ]);
-      
-      await syncProductFields(fields);
-      await syncCardStyles(styles);
-      
-      console.log('✅ Configuración de tarjetas sincronizada');
-    } catch (configError) {
-      console.warn('⚠️ Error al sincronizar configuración de tarjetas:', configError);
-    }
-
     // Cachear imágenes de productos
     onProgress?.('Descargando imágenes...');
     const imageUrls = response.products
