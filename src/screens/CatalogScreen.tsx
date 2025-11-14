@@ -1871,7 +1871,7 @@ const styles = StyleSheet.create({
   },
   customTextCompact: {
     flex: 1,
-    height: 28,
+    height: 24,
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderRadius: 4,
@@ -1886,7 +1886,7 @@ const styles = StyleSheet.create({
   },
   customSelectCompact: {
     flex: 1,
-    height: 28,
+    height: 24,
     borderWidth: 1,
     borderColor: '#d1d5db',
     borderRadius: 4,
@@ -1895,7 +1895,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pickerStyle: {
-    height: 28,
+    height: 24,
     fontSize: 12,
   },
   customTextModalOverlay: {

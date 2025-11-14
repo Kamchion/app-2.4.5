@@ -184,11 +184,21 @@ const DynamicProductCard = React.memo(({ item, navigation, priceType, onAddToCar
 
     if (!value && value !== 0) return null;
 
-    // Forzar fontSize 10 para el nombre del producto
-    const fontSize = field.field === 'name' ? 10 : parseInt(field.fontSize || '12');
+    // Forzar estilos específicos para name y price
+    let fontSize = parseInt(field.fontSize || '12');
+    let color = field.textColor || '#000000';
+    
+    if (field.field === 'name') {
+      fontSize = 10; // Forzar fontSize 10 para nombre
+    }
+    
+    if (field.field === 'rolePrice' || field.field === 'price') {
+      fontSize = 14; // Forzar fontSize 14 para precio
+      color = '#2563eb'; // Forzar color azul para precio
+    }
     
     const style = {
-      color: field.textColor || '#000000',
+      color: color,
       fontSize: fontSize,
       fontWeight: (field.fontWeight || '400') as any,
       textAlign: (field.textAlign || 'left') as any,
@@ -251,12 +261,23 @@ const DynamicProductCard = React.memo(({ item, navigation, priceType, onAddToCar
     }
   };
 
-  // Agrupar campos por filas según configuración de columnas
+  // Agrupar campos por filas con orden personalizado
   const groupFieldsByRow = (fields: FieldConfig[]) => {
+    // Separar campos por tipo
+    const priceFields = fields.filter(f => f.field === 'rolePrice' || f.field === 'price');
+    const customFields = fields.filter(f => f.field === 'customText' || f.field === 'customSelect');
+    const otherFields = fields.filter(f => 
+      f.field !== 'rolePrice' && 
+      f.field !== 'price' && 
+      f.field !== 'customText' && 
+      f.field !== 'customSelect'
+    );
+
     const rows: FieldConfig[][] = [];
     let currentRow: FieldConfig[] = [];
 
-    fields.forEach((field) => {
+    // Primero: renderizar campos normales (nombre, stock, etc.)
+    otherFields.forEach((field) => {
       const column = field.column || 'full';
       
       if (column === 'full') {
@@ -286,6 +307,17 @@ const DynamicProductCard = React.memo(({ item, navigation, priceType, onAddToCar
 
     if (currentRow.length > 0) {
       rows.push(currentRow);
+      currentRow = [];
+    }
+
+    // Segundo: customText y customSelect en una fila
+    if (customFields.length > 0) {
+      rows.push(customFields);
+    }
+
+    // Tercero: precio justo antes de cantidad
+    if (priceFields.length > 0) {
+      rows.push(priceFields);
     }
 
     return rows;
