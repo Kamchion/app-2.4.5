@@ -454,8 +454,8 @@ export async function syncPendingOrders(
         );
         
         if (order) {
-          // Generar nuevo número B para el pedido enviado
-          const sentOrderNumber = await generateSentOrderNumber();
+          // Mantener el mismo ID (ya tiene formato {agentNumber}A{8-digit})
+          const orderNumber = order.orderNumber || order.id;
           
           // Obtener los items del pedido
           const items = await db.getAllAsync<PendingOrderItem>(
@@ -463,14 +463,15 @@ export async function syncPendingOrders(
             [order.id]
           );
           
-          // Insertar en order_history con número B y status "enviado"
+          // Insertar en order_history con el mismo ID y status "enviado"
           const historyResult = await db.runAsync(
             `INSERT INTO order_history (
-              orderNumber, clientId, customerName, customerNote,
+              id, orderNumber, clientId, customerName, customerNote,
               subtotal, total, tax, status, synced, createdAt
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-              sentOrderNumber, // Nuevo número B
+              order.id, // Mantener el mismo ID
+              orderNumber, // Mantener el mismo orderNumber
               order.clientId,
               order.customerName,
               order.customerNote,
@@ -483,8 +484,8 @@ export async function syncPendingOrders(
             ]
           );
           
-          // Obtener el ID generado automáticamente
-          const newHistoryId = historyResult.lastInsertRowId;
+          // Usar el mismo ID del pedido original
+          const newHistoryId = order.id;
           
           // Insertar items en order_history_items
           for (const item of items) {
