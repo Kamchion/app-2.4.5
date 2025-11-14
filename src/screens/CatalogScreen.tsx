@@ -1118,31 +1118,33 @@ export default function CatalogScreen({ navigation }: CatalogScreenProps) {
               </TouchableOpacity>
               {showCategoryDropdown && (
                 <View style={styles.categoryDropdownMenu}>
-                  <TouchableOpacity
-                    style={styles.categoryDropdownItem}
-                    onPress={() => {
-                      setSelectedCategory('');
-                      setShowCategoryDropdown(false);
-                    }}
-                  >
-                    <Text style={[styles.categoryDropdownItemText, !selectedCategory && styles.categoryDropdownItemTextActive]}>
-                      Todas
-                    </Text>
-                  </TouchableOpacity>
-                  {categories.map((category) => (
+                  <ScrollView style={styles.categoryDropdownScroll} nestedScrollEnabled={true}>
                     <TouchableOpacity
-                      key={category}
                       style={styles.categoryDropdownItem}
                       onPress={() => {
-                        setSelectedCategory(category);
+                        setSelectedCategory('');
                         setShowCategoryDropdown(false);
                       }}
                     >
-                      <Text style={[styles.categoryDropdownItemText, selectedCategory === category && styles.categoryDropdownItemTextActive]}>
-                        {category}
+                      <Text style={[styles.categoryDropdownItemText, !selectedCategory && styles.categoryDropdownItemTextActive]}>
+                        Todas
                       </Text>
                     </TouchableOpacity>
-                  ))}
+                    {categories.map((category) => (
+                      <TouchableOpacity
+                        key={category}
+                        style={styles.categoryDropdownItem}
+                        onPress={() => {
+                          setSelectedCategory(category);
+                          setShowCategoryDropdown(false);
+                        }}
+                      >
+                        <Text style={[styles.categoryDropdownItemText, selectedCategory === category && styles.categoryDropdownItemTextActive]}>
+                          {category}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 </View>
               )}
             </View>
@@ -1401,7 +1403,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     zIndex: 1000,
-    overflow: 'hidden',
+    maxHeight: 300,
+  },
+  categoryDropdownScroll: {
     maxHeight: 300,
   },
   categoryDropdownItem: {
