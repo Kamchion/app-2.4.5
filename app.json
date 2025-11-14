@@ -28,7 +28,7 @@
         "android.permission.READ_EXTERNAL_STORAGE"
       ],
       "edgeToEdgeEnabled": true,
-      "versionCode": 345
+      "versionCode": 349
     },
     "web": {
       "favicon": "./assets/favicon.png"
