@@ -225,7 +225,7 @@ export default function OrderDetailScreen() {
           onPress: async () => {
             setLoading(true);
             try {
-              const { createOrderOnline } = require('../services/api');
+              const { uploadPendingOrders } = require('../services/api');
               const { getDatabase } = require('../database/db');
               const { generateSentOrderNumber } = require('../utils/orderNumber');
               const db = getDatabase();
@@ -248,36 +248,30 @@ export default function OrderDetailScreen() {
                 [orderId]
               );
 
-              // 3. Cargar los productos completos para enviar
-              const cart = [];
-              for (const item of items) {
-                const product = await db.getFirstAsync<any>(
-                  'SELECT * FROM products WHERE id = ?',
-                  [item.productId]
-                );
-                if (product) {
-                  cart.push({
-                    product: {
-                      id: product.id,
-                      name: product.name,
-                      sku: product.sku,
-                      price: item.pricePerUnit
-                    },
-                    quantity: item.quantity,
-                    customText: item.customText || undefined,
-                    customSelect: item.customSelect || undefined,
-                  });
-                }
-              }
+              // 3. Preparar datos para uploadPendingOrders
+              const orderToUpload = {
+                clientId: order.clientId,
+                customerNote: order.customerNote,
+                items: items.map((item: any) => ({
+                  productId: item.productId,
+                  quantity: item.quantity,
+                  pricePerUnit: item.pricePerUnit,
+                  customText: item.customText,
+                  customSelect: item.customSelect,
+                })),
+                createdAtOffline: order.createdAt,
+              };
 
               try {
                 // 4. Intentar enviar al servidor
                 console.log('🌐 Intentando enviar pedido al backend...');
-                const result = await createOrderOnline({
-                  cart: cart,
-                  customerNote: order.customerNote || '',
-                  selectedClientId: order.clientId.toString(),
-                });
+                const response = await uploadPendingOrders([orderToUpload]);
+                
+                if (!response.success || response.results[0]?.success !== true) {
+                  throw new Error('Error al subir el pedido');
+                }
+                
+                const result = response.results[0];
 
                 // 5. Si tiene éxito, mover a order_history con número B
                 const sentOrderNumber = await generateSentOrderNumber();
