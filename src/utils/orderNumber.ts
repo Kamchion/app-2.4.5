@@ -52,7 +52,17 @@ export async function generateSentOrderNumber(): Promise<string> {
     
     // Buscar todos los pedidos del agente actual con formato {agentNumber}B
     const pattern = `${agentNumber}B%`;
-    const orders = await db.getAllAsync<{ orderNumber: string }>(
+    
+    // Buscar en AMBAS tablas: pending_orders Y order_history
+    const pendingOrders = await db.getAllAsync<{ orderNumber: string }>(
+      `SELECT orderNumber FROM pending_orders 
+       WHERE orderNumber LIKE ? 
+       ORDER BY orderNumber DESC 
+       LIMIT 1`,
+      [pattern]
+    );
+    
+    const historyOrders = await db.getAllAsync<{ orderNumber: string }>(
       `SELECT orderNumber FROM order_history 
        WHERE orderNumber LIKE ? 
        ORDER BY orderNumber DESC 
@@ -62,12 +72,19 @@ export async function generateSentOrderNumber(): Promise<string> {
     
     let nextNumber = 1;
     
-    if (orders.length > 0 && orders[0].orderNumber) {
-      // Extraer el número del formato {agentNumber}B00000001
-      const parts = orders[0].orderNumber.split('B');
-      if (parts.length === 2) {
-        nextNumber = parseInt(parts[1], 10) + 1;
-      }
+    // Obtener el número más alto de ambas tablas
+    const allOrders = [...pendingOrders, ...historyOrders];
+    if (allOrders.length > 0) {
+      const maxOrder = allOrders.reduce((max, order) => {
+        const parts = order.orderNumber.split('B');
+        if (parts.length === 2) {
+          const num = parseInt(parts[1], 10);
+          return num > max ? num : max;
+        }
+        return max;
+      }, 0);
+      
+      nextNumber = maxOrder + 1;
     }
     
     // Formatear con ceros a la izquierda (8 dígitos)
