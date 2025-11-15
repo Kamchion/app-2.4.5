@@ -19,8 +19,10 @@ import CartScreen from './src/screens/CartScreen';
 import CheckoutScreen from './src/screens/CheckoutScreen';
 import OrdersScreen from './src/screens/OrdersScreen';
 import OrderDetailScreen from './src/screens/OrderDetailScreen';
+import LogViewerScreen from './src/screens/LogViewerScreen';
 
 // Services
+import logger from './src/services/logger';
 import { setupAutoSync } from './src/services/sync';
 import { initImageCache } from './src/services/imageCache';
 import { initDatabase, resetDatabase } from './src/database/db';
@@ -34,6 +36,7 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [menuVisible, setMenuVisible] = useState(false);
+  const navigationRef = React.useRef<any>(null);
 
   useEffect(() => {
     initializeApp();
@@ -269,6 +272,19 @@ export default function App() {
             </TouchableOpacity>
             
             <TouchableOpacity 
+              style={styles.menuButton}
+              onPress={() => {
+                setMenuVisible(false);
+                // Navegar a logs usando la referencia de navegación
+                setTimeout(() => {
+                  navigationRef.current?.navigate('LogViewer');
+                }, 100);
+              }}
+            >
+              <Text style={styles.menuButtonText}>📋 Ver Logs</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
               style={[styles.menuButton, styles.deleteButton]}
               onPress={handleDeleteAll}
             >
@@ -292,7 +308,7 @@ export default function App() {
         </TouchableOpacity>
       </Modal>
       
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <Stack.Navigator
           screenOptions={{
             headerStyle: {
@@ -407,6 +423,17 @@ export default function App() {
                 name="OrderDetail"
                 component={OrderDetailScreen}
                 options={{ title: 'Detalles del Pedido' }}
+              />
+
+              {/* Log Viewer */}
+              <Stack.Screen
+                name="LogViewer"
+                component={LogViewerScreen}
+                options={{ 
+                  title: 'Logs del Sistema',
+                  headerStyle: { backgroundColor: '#0F172A' },
+                  headerTintColor: '#F1F5F9',
+                }}
               />
             </>
           )}

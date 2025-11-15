@@ -77,6 +77,7 @@ export async function cacheImage(imageUrl: string): Promise<string | null> {
     if (index[imageUrl]) {
       const fileInfo = await FileSystem.getInfoAsync(index[imageUrl].localPath);
       if (fileInfo.exists) {
+        console.log(`💾 Imagen ya cacheada: ${index[imageUrl].localPath}`);
         return index[imageUrl].localPath;
       }
     }
@@ -85,9 +86,18 @@ export async function cacheImage(imageUrl: string): Promise<string | null> {
     const fileName = getFileNameFromUrl(imageUrl);
     const localPath = `${IMAGE_CACHE_DIR}${fileName}`;
 
+    console.log(`📥 Descargando imagen: ${imageUrl}`);
+    console.log(`💾 Guardando en: ${localPath}`);
+
     const downloadResult = await FileSystem.downloadAsync(imageUrl, localPath);
 
+    console.log(`📄 Estado de descarga: ${downloadResult.status}`);
+
     if (downloadResult.status === 200) {
+      // Verificar que el archivo se creó
+      const fileInfo = await FileSystem.getInfoAsync(localPath);
+      console.log(`📁 Archivo creado: ${fileInfo.exists}, Tamaño: ${'size' in fileInfo ? fileInfo.size : 'N/A'}`);
+
       // Actualizar índice
       index[imageUrl] = {
         localPath,
@@ -95,13 +105,15 @@ export async function cacheImage(imageUrl: string): Promise<string | null> {
       };
       await saveCacheIndex(index);
 
-      console.log(`✅ Imagen cacheada: ${fileName}`);
+      console.log(`✅ Imagen cacheada exitosamente: ${fileName}`);
       return localPath;
+    } else {
+      console.warn(`⚠️ Error HTTP al descargar imagen: ${downloadResult.status}`);
     }
 
     return null;
   } catch (error) {
-    console.error('Error al cachear imagen:', error);
+    console.error('❌ Error al cachear imagen:', error);
     return null;
   }
 }
@@ -141,6 +153,8 @@ export async function cacheMultipleImages(
   let success = 0;
   let failed = 0;
 
+  console.log(`📦 Iniciando descarga de ${imageUrls.length} imágenes...`);
+
   for (let i = 0; i < imageUrls.length; i++) {
     const url = imageUrls[i];
     onProgress?.(i + 1, imageUrls.length);
@@ -152,6 +166,9 @@ export async function cacheMultipleImages(
       failed++;
     }
   }
+
+  console.log(`✅ Descarga completada: ${success} exitosas, ${failed} fallidas`);
+  console.log(`💾 Directorio de caché: ${IMAGE_CACHE_DIR}`);
 
   return { success, failed };
 }
@@ -172,6 +189,31 @@ export async function clearImageCache(): Promise<void> {
     console.log('✅ Caché de imágenes limpiado');
   } catch (error) {
     console.error('Error al limpiar caché:', error);
+  }
+}
+
+/**
+ * Lista todas las imágenes cacheadas
+ */
+export async function listCachedImages(): Promise<{ url: string; localPath: string; exists: boolean; size?: number }[]> {
+  try {
+    const index = await getCacheIndex();
+    const results = [];
+
+    for (const [url, entry] of Object.entries(index)) {
+      const fileInfo = await FileSystem.getInfoAsync(entry.localPath);
+      results.push({
+        url,
+        localPath: entry.localPath,
+        exists: fileInfo.exists,
+        size: fileInfo.exists && 'size' in fileInfo ? fileInfo.size : undefined,
+      });
+    }
+
+    return results;
+  } catch (error) {
+    console.error('Error al listar imágenes cacheadas:', error);
+    return [];
   }
 }
 
