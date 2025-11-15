@@ -366,6 +366,9 @@ export async function syncCatalog(
   }
 }
 
+// Flag para evitar múltiples sincronizaciones de pedidos simultáneas
+let isPendingOrdersSyncInProgress = false;
+
 /**
  * Sincroniza pedidos pendientes
  * Sube pedidos creados offline al servidor
@@ -373,6 +376,18 @@ export async function syncCatalog(
 export async function syncPendingOrders(
   onProgress?: (message: string) => void
 ): Promise<{ success: boolean; message: string; ordersSynced: number }> {
+  // Verificar si ya hay una sincronización en progreso
+  if (isPendingOrdersSyncInProgress) {
+    console.log('⚠️ syncPendingOrders ya en progreso, omitiendo...');
+    return {
+      success: false,
+      message: 'Sincronización ya en progreso',
+      ordersSynced: 0,
+    };
+  }
+  
+  isPendingOrdersSyncInProgress = true;
+  
   try {
     onProgress?.('Verificando conexión...');
     const isOnline = await checkConnection();
@@ -390,8 +405,9 @@ export async function syncPendingOrders(
     
     // Obtener pedidos pendientes (no sincronizados y con status='pending')
     // ✅ Excluir borradores (status='draft') de la sincronización automática
+    // ✅ Usar DISTINCT para evitar duplicados
     const pendingOrders = await db.getAllAsync<PendingOrder>(
-      "SELECT * FROM pending_orders WHERE synced = 0 AND status = 'pending'"
+      "SELECT DISTINCT * FROM pending_orders WHERE synced = 0 AND status = 'pending' GROUP BY id"
     );
 
     console.log(`📊 syncPendingOrders: Encontrados ${pendingOrders.length} pedidos pendientes`);
@@ -460,13 +476,30 @@ export async function syncPendingOrders(
     // Mover pedidos sincronizados a order_history
     for (const result of response.results) {
       if (result.success) {
-        // Obtener el pedido original
-        const order = await db.getFirstAsync<PendingOrder>(
-          'SELECT * FROM pending_orders WHERE createdAt = ?',
-          [result.createdAtOffline]
-        );
-        
-        if (order) {
+        try {
+          // Obtener el pedido original
+          const order = await db.getFirstAsync<PendingOrder>(
+            'SELECT * FROM pending_orders WHERE createdAt = ?',
+            [result.createdAtOffline]
+          );
+          
+          if (!order) {
+            console.warn('⚠️ Pedido no encontrado para createdAt:', result.createdAtOffline);
+            continue;
+          }
+          
+          // Verificar si ya existe en order_history (protección contra duplicados)
+          const existingHistory = await db.getFirstAsync<any>(
+            'SELECT id FROM order_history WHERE id = ?',
+            [order.id]
+          );
+          
+          if (existingHistory) {
+            console.log('✅ Pedido ya existe en historial, solo eliminando de pending:', order.id);
+            await db.runAsync('DELETE FROM pending_order_items WHERE orderId = ?', [order.id]);
+            await db.runAsync('DELETE FROM pending_orders WHERE id = ?', [order.id]);
+            continue;
+          }
           // Mantener el mismo ID (ya tiene formato {agentNumber}A{8-digit})
           const orderNumber = order.orderNumber || order.id;
           
@@ -522,6 +555,12 @@ export async function syncPendingOrders(
           // Eliminar de pending_orders y pending_order_items
           await db.runAsync('DELETE FROM pending_order_items WHERE orderId = ?', [order.id]);
           await db.runAsync('DELETE FROM pending_orders WHERE id = ?', [order.id]);
+          
+          console.log('✅ Pedido procesado correctamente:', order.id);
+        } catch (error: any) {
+          console.error('❌ Error al procesar resultado de sincronización:', error);
+          console.error('  createdAtOffline:', result.createdAtOffline);
+          // Continuar con el siguiente pedido aunque falle uno
         }
       }
     }
@@ -539,6 +578,8 @@ export async function syncPendingOrders(
       message: error.message || 'Error desconocido',
       ordersSynced: 0,
     };
+  } finally {
+    isPendingOrdersSyncInProgress = false;
   }
 }
 
@@ -947,6 +988,11 @@ export async function incrementalSync(
   }
 }
 
+// Flag global para evitar sincronizaciones concurrentes
+let isSyncInProgress = false;
+let lastSyncTime = 0;
+const MIN_SYNC_INTERVAL = 5000; // 5 segundos mínimo entre sincronizaciones
+
 /**
  * Configura sincronización automática al detectar conexión
  */
@@ -955,11 +1001,35 @@ export function setupAutoSync(
 ): () => void {
   const unsubscribe = NetInfo.addEventListener((state) => {
     if (state.isConnected) {
+      const now = Date.now();
+      
+      // Verificar si ya hay una sincronización en progreso
+      if (isSyncInProgress) {
+        console.log('⚠️ Sincronización ya en progreso, omitiendo...');
+        return;
+      }
+      
+      // Verificar si ha pasado suficiente tiempo desde la última sincronización
+      if (now - lastSyncTime < MIN_SYNC_INTERVAL) {
+        console.log('⏱️ Sincronización reciente, omitiendo (esperar', Math.ceil((MIN_SYNC_INTERVAL - (now - lastSyncTime)) / 1000), 's)...');
+        return;
+      }
+      
       console.log('🌐 Conexión detectada, iniciando sincronización automática...');
-      fullSync().then((result) => {
-        console.log('✅ Sincronización automática completada:', result);
-        onSyncComplete?.(result);
-      });
+      isSyncInProgress = true;
+      lastSyncTime = now;
+      
+      fullSync()
+        .then((result) => {
+          console.log('✅ Sincronización automática completada:', result);
+          onSyncComplete?.(result);
+        })
+        .catch((error) => {
+          console.error('❌ Error en sincronización automática:', error);
+        })
+        .finally(() => {
+          isSyncInProgress = false;
+        });
     }
   });
 
