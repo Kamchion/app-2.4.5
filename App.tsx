@@ -177,7 +177,7 @@ export default function App() {
             try {
               // Importar AsyncStorage y FileSystem
               const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-              const FileSystem = (await import('expo-file-system')).default;
+              const FileSystem = (await import('expo-file-system/legacy')).default;
               
               // 1. Borrar todos los datos de la base de datos
               const { getDatabase } = await import('./src/database/db');
